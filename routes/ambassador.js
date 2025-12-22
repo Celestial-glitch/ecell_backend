@@ -2,6 +2,9 @@ import express from "express";
 import prisma from "../lib/prisma.js";
 
 const router = express.Router();
+router.get("/debug-sub", (req,res)=>{
+  res.json({msg:"Hit type1"});
+});
 
 //profile userdata
 router.get("/user", async (req, res) => {
@@ -614,5 +617,189 @@ router.delete("/submissions/clear", async (req, res) => {
       .json({ error: "An error occurred while clearing submissions." });
   }
 });
+
+// new endpoints for admin cap
+// admin -view all tasks
+
+
+router.get("/admin/tasks", async (req, res) => {
+  try {
+    const tasks = await prisma.task.findMany({
+      orderBy: { id: "desc" },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        lastDate: true,
+        points: true,
+        status: true,
+      },
+    });
+
+    res.status(200).json(tasks);
+  } catch (error) {
+    console.error("Error fetching admin tasks:", error);
+    res.status(500).json({ error: "Unable to fetch admin tasks" });
+  }
+});
+
+
+//admin- get all drive tasks
+
+router.get("/type1-submissions", async (req, res) => {
+  try {
+    // fetch all submission rows with task + user
+    const submissions = await prisma.submission.findMany({
+      where: {
+        submission: { not: "" },   // only submissions that contain a link
+      },
+      include: {
+        task: true,
+      }
+    });
+
+    // map submission table → frontend structure
+    const formatted = await Promise.all(
+      submissions.map(async (sub) => {
+        const user = await prisma.campusAmbassador.findUnique({
+          where: { email: sub.userEmail },
+        });
+        
+        // return {
+        //   id: sub.id,
+        //   taskTitle: sub.task.title,
+        //   studentName: user?.name || null,
+        //   driveLink: sub.submission,
+        //   status: sub.status,
+        // };
+           return {
+             id: sub.id,
+             taskId: sub.taskId,   
+             taskTitle: sub.task.title,
+             points: sub.task.points,  
+             studentName: user?.name || null,
+             driveLink: sub.submission,
+             status: sub.status,
+      };
+
+      })
+    );
+
+    res.json(formatted);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Failed to load submissions" });
+  }
+});
+
+// router.put("/type1-submissions/:id/status", async (req, res) => {
+//   const { id } = req.params;
+//   const { status } = req.body;
+
+//   if (!["accepted", "rejected", "pending"].includes(status)) {
+//     return res.status(400).json({ error: "Invalid status" });
+//   }
+
+//   try {
+//     const updated = await prisma.submission.update({
+//       where: { id: Number(id) },
+//       data: { status },
+//     });
+
+//     res.json({ message: "Status updated", updated });
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).json({ error: "Failed to update status" });
+//   }
+// });
+
+
+
+router.put("/type1-submissions/:id/status", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!["accepted", "rejected", "pending"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+
+  try {
+    // fetch existing submission
+    const submission = await prisma.submission.findUnique({
+      where: { id: Number(id) },
+      include: { task: true }
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: "Submission not found" });
+    }
+
+    // fetch user
+    const user = await prisma.campusAmbassador.findUnique({
+      where: { email: submission.userEmail }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    let pointChange = 0;
+
+    // CASE 1: accepted now
+    if (status === "accepted") {
+      // if previous was NOT accepted, add points
+      if (submission.status !== "accepted") {
+        pointChange = submission.task.points; 
+      }
+    }
+
+    // CASE 2: rejected now
+    if (status === "rejected") {
+      // if previously accepted, subtract points
+      if (submission.status === "accepted") {
+        pointChange = -submission.task.points;
+      }
+    }
+
+    // CASE 3: pending
+    if (status === "pending") {
+      // if previously accepted, remove points
+      if (submission.status === "accepted") {
+        pointChange = -submission.task.points;
+      }
+    }
+
+    // update submission status
+    await prisma.submission.update({
+      where: { id: Number(id) },
+      data: { status }
+    });
+
+    // update user points if needed
+    if (pointChange !== 0) {
+      await prisma.campusAmbassador.update({
+        where: { id: user.id },
+        data: {
+          points: { increment: pointChange }
+        }
+      });
+    }
+
+    res.json({
+      message: "Status + Points updated",
+      status,
+      pointChange
+    });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Failed to update status + points" });
+  }
+});
+
+
+
+
+
 
 export default router

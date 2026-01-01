@@ -2,804 +2,742 @@ import express from "express";
 import prisma from "../lib/prisma.js";
 
 const router = express.Router();
-router.get("/debug-sub", (req,res)=>{
-  res.json({msg:"Hit type1"});
+router.get("/debug-sub", (req, res) => {
+    res.json({ msg: "Hit type1" });
 });
 
 //profile userdata
 router.get("/user", async (req, res) => {
-  const { email } = req.query; // Extract email from query parameters
-  if (!email) {
-    return res.status(400).json({ error: "Email is required" });
-  }
-  try {
-    const userData = await prisma.campusAmbassador.findUnique({
-      where: { email: email }, // Find user by email
-      select: {
-        id: true,
-        name: true,
-        collegeName: true,
-        collegeYear: true,
-        phone: true,
-        points: true,
-        referrals: true,
-        // Add any other fields you want to include in the response
-      },
-    });
-    if (userData) {
-      return res.status(200).json(userData); // Return user data if found
-    } else {
-      return res.status(404).json({ error: "User  not found" }); // User not found
+    const { email } = req.query; // Extract email from query parameters
+    if (!email) {
+        return res.status(400).json({ error: "Email is required" });
     }
-  } catch (error) {
-    console.error("Error fetching user data:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while fetching user data" });
-  }
+    try {
+        const userData = await prisma.campusAmbassador.findUnique({
+            where: { email: email }, // Find user by email
+            select: {
+                id: true,
+                name: true,
+                collegeName: true,
+                collegeYear: true,
+                phone: true,
+                points: true,
+                referrals: true,
+                // Add any other fields you want to include in the response
+            },
+        });
+        if (userData) {
+            return res.status(200).json(userData); // Return user data if found
+        } else {
+            return res.status(404).json({ error: "User  not found" }); // User not found
+        }
+    } catch (error) {
+        console.error("Error fetching user data:", error);
+        res.status(500).json({ error: "An error occurred while fetching user data" });
+    }
 });
 
 //leaderboard top 10
 router.get("/getLeaderboard", async (req, res) => {
-  try {
-    const topUsers = await prisma.campusAmbassador.findMany({
-      orderBy: {
-        points: "desc",
-      },
-      take: 10,
-      select: {
-        name: true,
-        points: true,
-        collegeName: true,
-      },
-    });
-    res.status(200).json(topUsers);
-  } catch (error) {
-    console.error(error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while fetching top user data" });
-  }
+    try {
+        const topUsers = await prisma.campusAmbassador.findMany({
+            orderBy: {
+                points: "desc",
+            },
+            take: 10,
+            select: {
+                name: true,
+                points: true,
+                collegeName: true,
+            },
+        });
+        res.status(200).json(topUsers);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "An error occurred while fetching top user data" });
+    }
 });
 
 router.get("/getTasks", async (req, res) => {
-  const { userId } = req.query;
+    const { userId } = req.query;
 
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized: User not logged in" });
-  }
-
-  try {
-    // Fetch the user based on userId
-    const user = await prisma.campusAmbassador.findUnique({
-      where: { id: Number(userId) },
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized: User not logged in" });
     }
 
-    // Now, we use the user's email from the user object
-    const userEmail = user.email;
+    try {
+        // Fetch the user based on userId
+        const user = await prisma.campusAmbassador.findUnique({
+            where: { id: Number(userId) },
+        });
 
-    // Fetch tasks associated with the user
-    const tasks = await prisma.task.findMany({
-      where: {
-        users: {
-          some: {
-            id: Number(userId), // Ensure the task is associated with the user
-          },
-        },
-      },
-      select: {
-        id: true,
-        title: true,
-        lastDate: true,
-        description: true,
-        points: true,
-        status: true,
-        submissions: {
-          // Fetch all submissions for the task
-          where: {
-            userEmail: userEmail, // Use the user's email here
-          },
-          select: {
-            status: true, // Fetch submission status
-            taskId: true, // Ensure we can check the task ID for submission
-          },
-        },
-      },
-    });
-
-    const currentDate = new Date();
-
-    const processedTasks = tasks.map((task) => {
-      let status = "Pending";
-      console.log(task, "qtt");
-      const submission = task.submissions.find((sub) => sub.taskId === task.id); // Find submission by task ID
-      if (submission) {
-        if (submission.status === "pending") {
-          status = "Pending";
-        } else if (submission.status === "submitted") {
-          status = "Submitted";
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
         }
-      } else if (!submission && task.lastDate < currentDate) {
-        status = "Missing"; // If no submission and the deadline has passed
-      }
 
-      return {
-        id: task.id,
-        title: task.title,
-        description: task.description,
-        status: status,
-        submitted: status === "Submitted",
-        lastDate: task.lastDate,
-      };
-    });
+        // Now, we use the user's email from the user object
+        const userEmail = user.email;
 
-    res.status(200).json(processedTasks);
-    console.log(processedTasks);
-  } catch (error) {
-    console.error("Error fetching tasks:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while fetching tasks info" });
-  }
+        // Fetch tasks associated with the user
+        const tasks = await prisma.task.findMany({
+            where: {
+                users: {
+                    some: {
+                        id: Number(userId), // Ensure the task is associated with the user
+                    },
+                },
+            },
+            select: {
+                id: true,
+                title: true,
+                lastDate: true,
+                description: true,
+                points: true,
+                status: true,
+                submissions: {
+                    // Fetch all submissions for the task
+                    where: {
+                        userEmail: userEmail, // Use the user's email here
+                    },
+                    select: {
+                        status: true, // Fetch submission status
+                        taskId: true, // Ensure we can check the task ID for submission
+                    },
+                },
+            },
+        });
+
+        const currentDate = new Date();
+
+        const processedTasks = tasks.map((task) => {
+            let status = "Pending";
+            console.log(task, "qtt");
+            const submission = task.submissions.find((sub) => sub.taskId === task.id); // Find submission by task ID
+            if (submission) {
+                if (submission.status === "pending") {
+                    status = "Pending";
+                } else if (submission.status === "submitted") {
+                    status = "Submitted";
+                }
+            } else if (!submission && task.lastDate < currentDate) {
+                status = "Missing"; // If no submission and the deadline has passed
+            }
+
+            return {
+                id: task.id,
+                title: task.title,
+                description: task.description,
+                status: status,
+                submitted: status === "Submitted",
+                lastDate: task.lastDate,
+            };
+        });
+
+        res.status(200).json(processedTasks);
+        console.log(processedTasks);
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        res.status(500).json({ error: "An error occurred while fetching tasks info" });
+    }
 });
 
 router.post("/submit", async (req, res) => {
-  const { taskId, submission, email } = req.body;
+    const { taskId, submission, email } = req.body;
 
-  try {
-    // Step 1: Find the user by email
-    const user = await prisma.campusAmbassador.findUnique({
-      where: { email: email },
-    });
+    try {
+        // Step 1: Find the user by email
+        const user = await prisma.campusAmbassador.findUnique({ where: { email: email } });
+        if (!user) return res.status(404).json({ error: "User not found" });
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+        // Step 2: Find the task by taskId
+        const task = await prisma.task.findUnique({ where: { id: taskId } });
+        if (!task) return res.status(404).json({ error: "Task not found" });
+
+        // Step 3: Check if a submission already exists for this user and task
+        let submissionRecord = await prisma.submission.findUnique({
+            where: {
+                userEmail_taskId: {
+                    userEmail: user.email,
+                    taskId: taskId,
+                },
+            },
+        });
+
+        if (submissionRecord) {
+            // If a submission already exists, update it
+            submissionRecord = await prisma.submission.update({
+                where: {
+                    id: submissionRecord.id,
+                },
+                data: {
+                    submission: submission,
+                    status: "submitted", // Set status as submitted
+                },
+            });
+        } else {
+            // If no submission exists, create a new one
+            await prisma.submission.create({
+                data: {
+                    taskId: task.id,
+                    userEmail: user.email,
+                    submission: submission,
+                    status: "submitted", // Set status as submitted
+                },
+            });
+        }
+
+        res.status(200).json({
+            message: "Task submission updated successfully.",
+        });
+    } catch (error) {
+        console.error("Error updating task submission:", error);
+        res.status(500).json({ error: "An error occurred while updating the task submission." });
     }
-
-    // Step 2: Find the task by taskId
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-    });
-    if (!task) {
-      return res.status(404).json({ error: "Task not found" });
-    }
-
-    // Step 3: Check if a submission already exists for this user and task
-    let submissionRecord = await prisma.submission.findUnique({
-      where: {
-        userEmail_taskId: {
-          userEmail: user.email,
-          taskId: taskId,
-        },
-      },
-    });
-
-    if (submissionRecord) {
-      // If a submission already exists, update it
-      submissionRecord = await prisma.submission.update({
-        where: {
-          id: submissionRecord.id,
-        },
-        data: {
-          submission: submission,
-          status: "submitted", // Set status as submitted
-        },
-      });
-    } else {
-      // If no submission exists, create a new one
-      await prisma.submission.create({
-        data: {
-          taskId: task.id,
-          userEmail: user.email,
-          submission: submission,
-          status: "submitted", // Set status as submitted
-        },
-      });
-    }
-
-    res.status(200).json({
-      message: "Task submission updated successfully.",
-    });
-  } catch (error) {
-    console.error("Error updating task submission:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while updating the task submission." });
-  }
 });
 
 router.post("/update", async (req, res) => {
-  const { id, name, collegeName, collegeYear, phone } = req.body;
+    const { id, name, collegeName, collegeYear, phone } = req.body;
 
-  try {
-    const updatedUser = await prisma.campusAmbassador.update({
-      where: { id: id }, // finding user by id
-      data: {
-        name: name,
-        collegeName: collegeName,
-        collegeYear: collegeYear,
-        phone: phone,
-      },
-    });
+    try {
+        const updatedUser = await prisma.campusAmbassador.update({
+            where: { id: id }, // finding user by id
+            data: {
+                name: name,
+                collegeName: collegeName,
+                collegeYear: collegeYear,
+                phone: phone,
+            },
+        });
 
-    res.json(updatedUser); // Return the updated user data
-  } catch (error) {
-    console.error("Error updating user:", error);
-    res.status(500).json({ error: "Unable to update user" });
-  }
+        res.json(updatedUser); // Return the updated user data
+    } catch (error) {
+        console.error("Error updating user:", error);
+        res.status(500).json({ error: "Unable to update user" });
+    }
 });
 
 router.post("/register", async (req, res) => {
-  const {
-    name,
-    collegeName,
-    collegeYear,
-    program,
-    phone,
-    email,
-    POR,
-    reasonToJoin,
-    roleInStudentBody,
-    skills,
-    experience,
-    roleInEcell,
-    hours,
-    contribution,
-    motivation,
-  } = req.body;
+    const { name, collegeName, collegeYear, program, phone, email, POR, reasonToJoin, roleInStudentBody, skills, experience, roleInEcell, hours, contribution, motivation } = req.body;
 
-  try {
-    // Check if the ambassador already exists
-    const existingAmbassador = await prisma.campusAmbassador.findUnique({
-      where: { email: email },
-    });
-
-    if (existingAmbassador) {
-      console.log("Ambassador found");
-      return res
-        .status(400)
-        .json({
-          error: "You have already submitted the form",
-          user: existingAmbassador,
+    try {
+        // Check if the ambassador already exists
+        const existingAmbassador = await prisma.campusAmbassador.findUnique({
+            where: { email: email },
         });
+
+        if (existingAmbassador) {
+            console.log("Ambassador found");
+            return res.status(400).json({
+                error: "You have already submitted the form",
+                user: existingAmbassador,
+            });
+        }
+
+        // Upsert User - find existing user or create new one
+        const user = await prisma.user.upsert({
+            where: { email: email },
+            update: {}, // No updates needed if user exists
+            create: { email: email }, // Create new user if doesn't exist
+        });
+
+        // Create a new campus ambassador
+        const newAmbassador = await prisma.campusAmbassador.create({
+            data: {
+                name,
+                collegeName,
+                collegeYear,
+                program,
+                phone,
+                email,
+                POR,
+                reasonToJoin,
+                roleInStudentBody,
+                skills,
+                experience,
+                roleInEcell,
+                hours,
+                contribution,
+                motivation,
+                points: 0,
+                userId: user.id, // Use the userId from the upserted user
+            },
+        });
+
+        // Get all active tasks
+        const activeTasks = await prisma.task.findMany();
+
+        // Create a submission object for each task and connect the user
+        const submissionsData = activeTasks.map((task) => ({
+            taskId: task.id,
+            userEmail: newAmbassador.email,
+            submission: "", // Initially empty, can be updated later
+            status: "pending", // Default status
+        }));
+
+        // Create submissions for all tasks linked to the new ambassador
+        await prisma.submission.createMany({
+            data: submissionsData,
+        });
+
+        // Connect ambassador to tasks
+        for (const task of activeTasks) {
+            await prisma.task.update({
+                where: { id: task.id },
+                data: {
+                    users: {
+                        connect: { id: newAmbassador.id },
+                    },
+                },
+            });
+        }
+
+        res.status(201).json({
+            message: "Ambassador successfully registered and tasks assigned with submissions!",
+            user: newAmbassador,
+        });
+    } catch (error) {
+        console.error("Error adding user:", error);
+        res.status(500).json({ error: "Unable to add user" });
     }
-
-    // Upsert User - find existing user or create new one
-    const user = await prisma.user.upsert({
-      where: { email: email },
-      update: {}, // No updates needed if user exists
-      create: { email: email }, // Create new user if doesn't exist
-    });
-
-    // Create a new campus ambassador
-    const newAmbassador = await prisma.campusAmbassador.create({
-      data: {
-        name,
-        collegeName,
-        collegeYear,
-        program,
-        phone,
-        email,
-        POR,
-        reasonToJoin,
-        roleInStudentBody,
-        skills,
-        experience,
-        roleInEcell,
-        hours,
-        contribution,
-        motivation,
-        points: 0,
-        userId: user.id, // Use the userId from the upserted user
-      },
-    });
-
-    // Get all active tasks
-    const activeTasks = await prisma.task.findMany();
-
-    // Create a submission object for each task and connect the user
-    const submissionsData = activeTasks.map((task) => ({
-      taskId: task.id,
-      userEmail: newAmbassador.email,
-      submission: "", // Initially empty, can be updated later
-      status: "pending", // Default status
-    }));
-
-    // Create submissions for all tasks linked to the new ambassador
-    await prisma.submission.createMany({
-      data: submissionsData,
-    });
-
-    // Connect ambassador to tasks
-    for (const task of activeTasks) {
-      await prisma.task.update({
-        where: { id: task.id },
-        data: {
-          users: {
-            connect: { id: newAmbassador.id },
-          },
-        },
-      });
-    }
-
-    res
-      .status(201)
-      .json({
-        message:
-          "Ambassador successfully registered and tasks assigned with submissions!",
-        user: newAmbassador,
-      });
-  } catch (error) {
-    console.error("Error adding user:", error);
-    res.status(500).json({ error: "Unable to add user" });
-  }
 });
 
 router.get("/ping", (req, res) => {
-  res.status(200).json({ message: "Server is alive" });
+    res.status(200).json({ message: "Server is alive" });
 });
 
 router.post("/createTask", async (req, res) => {
-  const { title, description, lastDate, points } = req.body;
+    const { title, description, lastDate, points } = req.body;
 
-  // Validate input
-  if (!title || !description || !lastDate || !points) {
-    return res
-      .status(400)
-      .json({ error: "Title, description, lastDate, and points are required" });
-  }
-
-  try {
-    // Convert lastDate to Date format and ensure points are numbers
-    const taskData = {
-      title,
-      description,
-      lastDate: new Date(lastDate), // Ensure lastDate is in Date format
-      points: Number(points),
-      submitted: false,
-    };
-
-    // Create a task
-    const task = await prisma.task.create({
-      data: taskData,
-    });
-
-    // Get all users
-    const users = await prisma.campusAmbassador.findMany({
-      select: { id: true, email: true }, // Fetch user ID and email for creating submissions
-    });
-
-    if (users.length === 0) {
-      return res.status(400).json({ error: "No users found to assign tasks." });
+    // Validate input
+    if (!title || !description || !lastDate || !points) {
+        return res.status(400).json({ error: "Title, description, lastDate, and points are required" });
     }
 
-    // Prepare submission objects for each user
-    const submissions = users.map((user) => ({
-      taskId: task.id,
-      userEmail: user.email, // Use user email to create the submission
-      submission: "", // Empty submission initially
-      status: "pending", // Default status
-    }));
+    try {
+        // Convert lastDate to Date format and ensure points are numbers
+        const taskData = {
+            title,
+            description,
+            lastDate: new Date(lastDate), // Ensure lastDate is in Date format
+            points: Number(points),
+            submitted: false,
+        };
 
-    // Create submissions for each user
-    await prisma.submission.createMany({
-      data: submissions,
-    });
+        // Create a task
+        const task = await prisma.task.create({
+            data: taskData,
+        });
 
-    // Associate the created task with all users
-    await prisma.task.update({
-      where: { id: task.id },
-      data: {
-        users: {
-          connect: users.map((user) => ({ id: user.id })), // Connect each user to the task
-        },
-      },
-    });
+        // Get all users
+        const users = await prisma.campusAmbassador.findMany({
+            select: { id: true, email: true }, // Fetch user ID and email for creating submissions
+        });
 
-    res
-      .status(201)
-      .json({
-        message:
-          "Task successfully created, assigned to all users, and submissions created!",
-      });
-  } catch (error) {
-    console.error("Error creating tasks:", error);
-    res.status(500).json({ error: "An error occurred while creating tasks" });
-  }
+        if (users.length === 0) {
+            return res.status(400).json({ error: "No users found to assign tasks." });
+        }
+
+        // Prepare submission objects for each user
+        const submissions = users.map((user) => ({
+            taskId: task.id,
+            userEmail: user.email, // Use user email to create the submission
+            submission: "", // Empty submission initially
+            status: "pending", // Default status
+        }));
+
+        // Create submissions for each user
+        await prisma.submission.createMany({
+            data: submissions,
+        });
+
+        // Associate the created task with all users
+        await prisma.task.update({
+            where: { id: task.id },
+            data: {
+                users: {
+                    connect: users.map((user) => ({ id: user.id })), // Connect each user to the task
+                },
+            },
+        });
+
+        res.status(201).json({
+            message: "Task successfully created, assigned to all users, and submissions created!",
+        });
+    } catch (error) {
+        console.error("Error creating tasks:", error);
+        res.status(500).json({ error: "An error occurred while creating tasks" });
+    }
 });
 
 router.post("/admin/tasks", async (req, res) => {
-  const { taskId, userId, points } = req.body; // Extract data from the request body
+    const { taskId, userId, points } = req.body; // Extract data from the request body
 
-  try {
-    if (taskId && userId && points) {
-      // Step 1: Get the user's email using the userId
-      const user = await prisma.campusAmbassador.findUnique({
-        where: { id: userId },
-        select: { email: true }, // Get only the email field
-      });
+    try {
+        if (taskId && userId && points) {
+            // Step 1: Get the user's email using the userId
+            const user = await prisma.campusAmbassador.findUnique({
+                where: { id: userId },
+                select: { email: true }, // Get only the email field
+            });
 
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
+            if (!user) {
+                return res.status(404).json({ error: "User not found" });
+            }
 
-      // Step 2: Update the points in the submission table for the task-user relationship
-      // Step 3: Update the user's total points (if needed)
-      const updatedUser = await prisma.campusAmbassador.update({
-        where: { id: userId },
-        data: {
-          points: {
-            increment: points, // Increment the user's total points
-          },
-        },
-      });
-
-      return res.status(200).json({
-        message: "Points successfully assigned to the user-task submission!",
-      });
-    } else {
-      // If no taskId, userId, or points provided, return all users' responses
-      const userResponses = await prisma.campusAmbassador.findMany({
-        select: {
-          id: true,
-          name: true,
-          collegeName: true,
-          points: true,
-          email: true,
-          tasks: {
-            select: {
-              id: true,
-              title: true,
-              points: true,
-              submissions: {
-                select: {
-                  userEmail: true,
-                  status: true,
-                  submission: true, // Only fetch the status and other necessary data
+            // Step 2: Update the points in the submission table for the task-user relationship
+            // Step 3: Update the user's total points (if needed)
+            const updatedUser = await prisma.campusAmbassador.update({
+                where: { id: userId },
+                data: {
+                    points: {
+                        increment: points, // Increment the user's total points
+                    },
                 },
-              },
-            },
-          },
-        },
-      });
-      // Format responses and count completed tasks
-      const formattedResponses = userResponses.map((user) => {
-        // Count the completed tasks (tasks where there's a submission with status "submitted")
-        const completedTasksCount = user.tasks.filter((task) =>
-          task.submissions.some(
-            (submission) =>
-              submission.status === "submitted" &&
-              submission.userEmail === user.email
-          )
-        ).length;
+            });
 
-        return {
-          userId: user.id,
-          userName: user.name,
-          collegeName: user.collegeName,
-          totalPoints: user.points,
-          completedTasksCount, // Number of completed tasks
-          tasks: user.tasks.map((task) => {
-            // Get the submission for the current user (where userEmail matches)
-            const userSubmission = task.submissions.find(
-              (submission) => submission.userEmail === user.email
-            );
-            return {
-              taskId: task.id,
-              taskTitle: task.title,
-              submission: userSubmission ? userSubmission?.submission : null,
-              submitted: userSubmission?.status == "submitted",
-              taskPoints: task?.points,
-            };
-          }),
-        };
-      });
-      // Sort users by completed tasks count in descending order
-      formattedResponses.sort(
-        (a, b) => b.completedTasksCount - a.completedTasksCount
-      );
+            return res.status(200).json({
+                message: "Points successfully assigned to the user-task submission!",
+            });
+        } else {
+            // If no taskId, userId, or points provided, return all users' responses
+            const userResponses = await prisma.campusAmbassador.findMany({
+                select: {
+                    id: true,
+                    name: true,
+                    collegeName: true,
+                    points: true,
+                    email: true,
+                    tasks: {
+                        select: {
+                            id: true,
+                            title: true,
+                            points: true,
+                            submissions: {
+                                select: {
+                                    userEmail: true,
+                                    status: true,
+                                    submission: true, // Only fetch the status and other necessary data
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            // Format responses and count completed tasks
+            const formattedResponses = userResponses.map((user) => {
+                // Count the completed tasks (tasks where there's a submission with status "submitted")
+                const completedTasksCount = user.tasks.filter((task) => task.submissions.some((submission) => submission.status === "submitted" && submission.userEmail === user.email)).length;
 
-      return res.status(200).json(formattedResponses);
+                return {
+                    userId: user.id,
+                    userName: user.name,
+                    collegeName: user.collegeName,
+                    totalPoints: user.points,
+                    completedTasksCount, // Number of completed tasks
+                    tasks: user.tasks.map((task) => {
+                        // Get the submission for the current user (where userEmail matches)
+                        const userSubmission = task.submissions.find((submission) => submission.userEmail === user.email);
+                        return {
+                            taskId: task.id,
+                            taskTitle: task.title,
+                            submission: userSubmission ? userSubmission?.submission : null,
+                            submitted: userSubmission?.status == "submitted",
+                            taskPoints: task?.points,
+                        };
+                    }),
+                };
+            });
+            // Sort users by completed tasks count in descending order
+            formattedResponses.sort((a, b) => b.completedTasksCount - a.completedTasksCount);
+
+            return res.status(200).json(formattedResponses);
+        }
+    } catch (error) {
+        console.error("Error in admin tasks endpoint:", error);
+        res.status(500).json({ error: "An error occurred while processing the request" });
     }
-  } catch (error) {
-    console.error("Error in admin tasks endpoint:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while processing the request" });
-  }
 });
 
 // Endpoint to get earlier tasks with submission count
-router.get("/Tasks", async (req, res) => {
-  try {
-    // Fetch all tasks but ensure only unique tasks are returned
-    const tasks = await prisma.task.findMany({
-      distinct: ["id"], // Ensures each task is returned only once based on task ID
-    });
-    res.status(200).json(tasks);
-  } catch (error) {
-    console.error("Error fetching tasks:", error);
-    res.status(500).json({ error: "An error occurred while fetching tasks" });
-  }
+router.get("/tasks", async (req, res) => {
+    // Expect email as a query parameter: /tasks?email=abc@xyz
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: "Email query parameter is required" });
+
+    try {
+        // Fetch all tasks and include any submission by this user
+        const tasks = await prisma.task.findMany({
+            orderBy: { id: "asc" },
+            select: {
+                id: true,
+                title: true,
+                lastDate: true,
+                description: true,
+                points: true,
+                submissions: {
+                    where: { userEmail: email },
+                    select: { status: true, submission: true, taskId: true },
+                },
+            },
+        });
+
+        const now = new Date();
+
+        const result = tasks.map((task) => {
+            const sub = task.submissions && task.submissions.length ? task.submissions[0] : null;
+            let status = "Pending";
+            if (sub) {
+                // keep status as stored (pending/submitted/accepted/rejected)
+                status = sub.status;
+            } else if (task.lastDate && new Date(task.lastDate) < now) {
+                status = "Missing";
+            }
+
+            return {
+                id: task.id,
+                title: task.title,
+                status,
+                submitted: !!sub && (sub.status === "submitted" || sub.status === "accepted"),
+                submission: sub ? sub.submission : null,
+                lastDate: task.lastDate,
+            };
+        });
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        res.status(500).json({ error: "An error occurred while fetching tasks" });
+    }
 });
 
 router.put("/tasks/:taskId", async (req, res) => {
-  const { taskId } = req.params;
-  const { title, description, lastDate } = req.body;
+    const { taskId } = req.params;
+    const { title, description, lastDate } = req.body;
 
-  try {
-    const updatedTask = await prisma.task.update({
-      where: { id: Number(taskId) },
-      data: {
-        title,
-        description,
-        lastDate: lastDate ? new Date(lastDate) : undefined,
-      },
-    });
+    try {
+        const updatedTask = await prisma.task.update({
+            where: { id: Number(taskId) },
+            data: {
+                title,
+                description,
+                lastDate: lastDate ? new Date(lastDate) : undefined,
+            },
+        });
 
-    res.status(200).json(updatedTask);
-  } catch (error) {
-    console.error("Error updating task:", error);
-    res.status(500).json({ error: "Unable to update task" });
-  }
+        res.status(200).json(updatedTask);
+    } catch (error) {
+        console.error("Error updating task:", error);
+        res.status(500).json({ error: "Unable to update task" });
+    }
 });
 
 router.delete("/tasks/:taskId", async (req, res) => {
-  const { taskId } = req.params;
+    const { taskId } = req.params;
 
-  try {
-    // First, delete all submissions related to the task
-    await prisma.submission.deleteMany({
-      where: { taskId: Number(taskId) },
-    });
+    try {
+        // First, delete all submissions related to the task
+        await prisma.submission.deleteMany({
+            where: { taskId: Number(taskId) },
+        });
 
-    // Then, delete the task itself
-    await prisma.task.delete({
-      where: { id: Number(taskId) },
-    });
+        // Then, delete the task itself
+        await prisma.task.delete({
+            where: { id: Number(taskId) },
+        });
 
-    res
-      .status(200)
-      .json({
-        message: "Task and associated submissions successfully deleted",
-      });
-  } catch (error) {
-    console.error("Error deleting task:", error);
-    res.status(500).json({ error: "Unable to delete task and submissions" });
-  }
+        res.status(200).json({
+            message: "Task and associated submissions successfully deleted",
+        });
+    } catch (error) {
+        console.error("Error deleting task:", error);
+        res.status(500).json({ error: "Unable to delete task and submissions" });
+    }
 });
 
 router.post("/checkAdminEmail", async (req, res) => {
-  const { email } = req.body;
+    const { email } = req.body;
 
-  try {
-    // Check if an admin exists with the given email
-    const admin = await prisma.admin.findUnique({
-      where: { email: email },
-    });
+    try {
+        // Check if an admin exists with the given email
+        const admin = await prisma.admin.findUnique({
+            where: { email: email },
+        });
 
-    // If an admin with the given email exists, return true, otherwise false
-    if (admin) {
-      return res.status(200).json({ isAdmin: true });
-    } else {
-      return res.status(200).json({ isAdmin: false });
+        // If an admin with the given email exists, return true, otherwise false
+        if (admin) {
+            return res.status(200).json({ isAdmin: true });
+        } else {
+            return res.status(200).json({ isAdmin: false });
+        }
+    } catch (error) {
+        console.error("Error checking admin email:", error);
+        res.status(500).json({ error: "An error occurred while checking the admin email" });
     }
-  } catch (error) {
-    console.error("Error checking admin email:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while checking the admin email" });
-  }
 });
 
 router.delete("/submissions/clear", async (req, res) => {
-  try {
-    // Reset submission-related fields for all tasks
-    await prisma.task.updateMany({
-      data: {
-        submission: "",
-        submitted: false,
-        status: "pending",
-      },
-    });
+    try {
+        // Reset submission-related fields for all tasks
+        await prisma.task.updateMany({
+            data: {
+                submission: "",
+                submitted: false,
+                status: "pending",
+            },
+        });
 
-    res.status(200).json({
-      message: "All task submissions have been cleared successfully.",
-    });
-  } catch (error) {
-    console.error("Error clearing submissions:", error);
-    res
-      .status(500)
-      .json({ error: "An error occurred while clearing submissions." });
-  }
+        res.status(200).json({
+            message: "All task submissions have been cleared successfully.",
+        });
+    } catch (error) {
+        console.error("Error clearing submissions:", error);
+        res.status(500).json({ error: "An error occurred while clearing submissions." });
+    }
 });
 
 // new endpoints for admin cap
 // admin -view all tasks
 
-
 router.get("/admin/tasks", async (req, res) => {
-  try {
-    const tasks = await prisma.task.findMany({
-      orderBy: { id: "desc" },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        lastDate: true,
-        points: true,
-        status: true,
-      },
-    });
+    try {
+        const tasks = await prisma.task.findMany({
+            orderBy: { id: "desc" },
+            select: {
+                id: true,
+                title: true,
+                description: true,
+                lastDate: true,
+                points: true,
+                status: true,
+            },
+        });
 
-    res.status(200).json(tasks);
-  } catch (error) {
-    console.error("Error fetching admin tasks:", error);
-    res.status(500).json({ error: "Unable to fetch admin tasks" });
-  }
+        res.status(200).json(tasks);
+    } catch (error) {
+        console.error("Error fetching admin tasks:", error);
+        res.status(500).json({ error: "Unable to fetch admin tasks" });
+    }
 });
-
 
 //admin- get all drive tasks
 
 router.get("/type1-submissions", async (req, res) => {
-  try {
-    // fetch all submission rows with task + user
-    const submissions = await prisma.submission.findMany({
-      where: {
-        submission: { not: "" },   // only submissions that contain a link
-      },
-      include: {
-        task: true,
-      }
-    });
-
-    // map submission table → frontend structure
-    const formatted = await Promise.all(
-      submissions.map(async (sub) => {
-        const user = await prisma.campusAmbassador.findUnique({
-          where: { email: sub.userEmail },
+    try {
+        // fetch all submission rows with task + user
+        const submissions = await prisma.submission.findMany({
+            where: {
+                submission: { not: "" }, // only submissions that contain a link
+            },
+            include: {
+                task: true,
+            },
         });
-        
-        // return {
-        //   id: sub.id,
-        //   taskTitle: sub.task.title,
-        //   studentName: user?.name || null,
-        //   driveLink: sub.submission,
-        //   status: sub.status,
-        // };
-           return {
-             id: sub.id,
-             taskId: sub.taskId,   
-             taskTitle: sub.task.title,
-             points: sub.task.points,  
-             studentName: user?.name || null,
-             driveLink: sub.submission,
-             status: sub.status,
-      };
 
-      })
-    );
+        // map submission table → frontend structure
+        const formatted = await Promise.all(
+            submissions.map(async (sub) => {
+                const user = await prisma.campusAmbassador.findUnique({
+                    where: { email: sub.userEmail },
+                });
 
-    res.json(formatted);
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Failed to load submissions" });
-  }
+                return {
+                    id: sub.id,
+                    taskId: sub.taskId,
+                    taskTitle: sub.task.title,
+                    points: sub.task.points,
+                    studentName: user?.name || null,
+                    driveLink: sub.submission,
+                    status: sub.status,
+                };
+            })
+        );
+
+        res.json(formatted);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Failed to load submissions" });
+    }
 });
-
-// router.put("/type1-submissions/:id/status", async (req, res) => {
-//   const { id } = req.params;
-//   const { status } = req.body;
-
-//   if (!["accepted", "rejected", "pending"].includes(status)) {
-//     return res.status(400).json({ error: "Invalid status" });
-//   }
-
-//   try {
-//     const updated = await prisma.submission.update({
-//       where: { id: Number(id) },
-//       data: { status },
-//     });
-
-//     res.json({ message: "Status updated", updated });
-//   } catch (error) {
-//     console.log(error);
-//     res.status(500).json({ error: "Failed to update status" });
-//   }
-// });
-
-
 
 router.put("/type1-submissions/:id/status", async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
+    const { id } = req.params;
+    const { status } = req.body;
 
-  if (!["accepted", "rejected", "pending"].includes(status)) {
-    return res.status(400).json({ error: "Invalid status" });
-  }
-
-  try {
-    // fetch existing submission
-    const submission = await prisma.submission.findUnique({
-      where: { id: Number(id) },
-      include: { task: true }
-    });
-
-    if (!submission) {
-      return res.status(404).json({ error: "Submission not found" });
+    if (!["accepted", "rejected", "pending"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
     }
 
-    // fetch user
-    const user = await prisma.campusAmbassador.findUnique({
-      where: { email: submission.userEmail }
-    });
+    try {
+        // fetch existing submission
+        const submission = await prisma.submission.findUnique({
+            where: { id: Number(id) },
+            include: { task: true },
+        });
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    let pointChange = 0;
-
-    // CASE 1: accepted now
-    if (status === "accepted") {
-      // if previous was NOT accepted, add points
-      if (submission.status !== "accepted") {
-        pointChange = submission.task.points; 
-      }
-    }
-
-    // CASE 2: rejected now
-    if (status === "rejected") {
-      // if previously accepted, subtract points
-      if (submission.status === "accepted") {
-        pointChange = -submission.task.points;
-      }
-    }
-
-    // CASE 3: pending
-    if (status === "pending") {
-      // if previously accepted, remove points
-      if (submission.status === "accepted") {
-        pointChange = -submission.task.points;
-      }
-    }
-
-    // update submission status
-    await prisma.submission.update({
-      where: { id: Number(id) },
-      data: { status }
-    });
-
-    // update user points if needed
-    if (pointChange !== 0) {
-      await prisma.campusAmbassador.update({
-        where: { id: user.id },
-        data: {
-          points: { increment: pointChange }
+        if (!submission) {
+            return res.status(404).json({ error: "Submission not found" });
         }
-      });
+
+        // fetch user
+        const user = await prisma.campusAmbassador.findUnique({
+            where: { email: submission.userEmail },
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        let pointChange = 0;
+
+        // CASE 1: accepted now
+        if (status === "accepted") {
+            // if previous was NOT accepted, add points
+            if (submission.status !== "accepted") {
+                pointChange = submission.task.points;
+            }
+        }
+
+        // CASE 2: rejected now
+        if (status === "rejected") {
+            // if previously accepted, subtract points
+            if (submission.status === "accepted") {
+                pointChange = -submission.task.points;
+            }
+        }
+
+        // CASE 3: pending
+        if (status === "pending") {
+            // if previously accepted, remove points
+            if (submission.status === "accepted") {
+                pointChange = -submission.task.points;
+            }
+        }
+
+        // update submission status
+        await prisma.submission.update({
+            where: { id: Number(id) },
+            data: { status },
+        });
+
+        // update user points if needed
+        if (pointChange !== 0) {
+            await prisma.campusAmbassador.update({
+                where: { id: user.id },
+                data: {
+                    points: { increment: pointChange },
+                },
+            });
+        }
+
+        res.json({
+            message: "Status + Points updated",
+            status,
+            pointChange,
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Failed to update status + points" });
     }
-
-    res.json({
-      message: "Status + Points updated",
-      status,
-      pointChange
-    });
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Failed to update status + points" });
-  }
 });
 
-
-
-
-
-
-export default router
+export default router;
